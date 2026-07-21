@@ -1,0 +1,382 @@
+#!/usr/bin/env python3
+# extract.py - Serveur pour SECURE-EYE-XX (Optimisé pour VM1)
+
+import os
+import sys
+import json
+import socket
+import threading
+import time
+import requests
+from datetime import datetime
+from collections import defaultdict
+import subprocess
+
+# ============================================================================
+# CONFIGURATION
+# ============================================================================
+
+UDP_PORT = 9999
+TCP_PORT = 9998
+BUFFER_SIZE = 65535
+BATCH_SIZE = 50
+
+# URLs
+BACKEND_URL = "http://localhost:8000/api/v1/packets"
+ML_API_URL = "http://localhost:8001/api/v1/predict"
+
+# Cache
+CACHE_FILE = "/tmp/vm_ips.txt"
+CACHE_TTL = 60  # secondes
+
+# Buffer
+packet_buffer = []
+buffer_lock = threading.Lock()
+scan_buffer = []
+
+# Cache pour VM1
+vm1_ip_cache = None
+vm1_cache_time = 0
+
+# ============================================================================
+# LOGGING
+# ============================================================================
+
+def log_message(msg, level="INFO"):
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{timestamp}] [{level}] {msg}")
+
+# ============================================================================
+# DÉCOUVERTE RAPIDE DE VM1
+# ============================================================================
+
+def discover_vm1():
+    """Découvre rapidement l'IP de VM1 (SECURE-EYE) avec cache"""
+    global vm1_ip_cache, vm1_cache_time
+    
+    # 1. Vérifier le cache mémoire
+    if vm1_ip_cache and (time.time() - vm1_cache_time) < CACHE_TTL:
+        return vm1_ip_cache
+    
+    # 2. Vérifier le cache fichier
+    if os.path.exists(CACHE_FILE):
+        try:
+            with open(CACHE_FILE, 'r') as f:
+                for line in f:
+                    if line.startswith("VM1="):
+                        ip = line.strip().split('=')[1]
+                        if ping_host(ip):
+                            vm1_ip_cache = ip
+                            vm1_cache_time = time.time()
+                            return ip
+        except:
+            pass
+    
+    # 3. Essayer mDNS (rapide)
+    try:
+        ip = socket.gethostbyname("secure-eye.local")
+        vm1_ip_cache = ip
+        vm1_cache_time = time.time()
+        with open(CACHE_FILE, 'a') as f:
+            f.write(f"VM1={ip}\n")
+        return ip
+    except:
+        pass
+    
+    # 4. Scanner le réseau (optimisé)
+    gateway = os.popen("ip route | grep default | awk '{print $3}'").read().strip()
+    subnet = ".".join(gateway.split('.')[:3])
+    
+    if subnet:
+        log_message(f"🔍 Scanning subnet {subnet}.0/24 for SECURE-EYE...")
+        
+        try:
+            result = subprocess.run(
+                ["arp-scan", "--localnet", "--retry=1", "--timeout=500"],
+                capture_output=True, text=True, timeout=5
+            )
+            active_ips = []
+            for line in result.stdout.split('\n'):
+                if '.' in line and '\t' in line:
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        active_ips.append(parts[0])
+            
+            for test_ip in active_ips:
+                if test_ip == "172.20.10.4":  # Sauter VM3
+                    continue
+                if ping_port(test_ip, 8001):
+                    vm1_ip_cache = test_ip
+                    vm1_cache_time = time.time()
+                    with open(CACHE_FILE, 'a') as f:
+                        f.write(f"VM1={test_ip}\n")
+                    return test_ip
+        except:
+            pass
+        
+        for i in range(1, 255):
+            test_ip = f"{subnet}.{i}"
+            if test_ip == "172.20.10.4":
+                continue
+            if ping_port(test_ip, 8001):
+                vm1_ip_cache = test_ip
+                vm1_cache_time = time.time()
+                with open(CACHE_FILE, 'a') as f:
+                    f.write(f"VM1={test_ip}\n")
+                return test_ip
+    
+    # 5. Fallback
+    log_message("⚠️  SECURE-EYE not found, using default IP")
+    return "172.20.10.2"
+
+def ping_host(ip):
+    """Vérifie si une IP répond au ping"""
+    try:
+        result = subprocess.run(
+            ["ping", "-c", "1", "-W", "1", ip],
+            capture_output=True, timeout=2
+        )
+        return result.returncode == 0
+    except:
+        return False
+
+def ping_port(ip, port):
+    """Vérifie si un port est ouvert"""
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(0.5)
+        result = sock.connect_ex((ip, port))
+        sock.close()
+        return result == 0
+    except:
+        return False
+
+# ============================================================================
+# SERVEUR UDP (reçoit les paquets de VM3)
+# ============================================================================
+
+def udp_server():
+    """Serveur UDP pour recevoir les paquets de VM3"""
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(('0.0.0.0', UDP_PORT))
+        sock.settimeout(1.0)
+        
+        log_message(f"📡 UDP Server listening on port {UDP_PORT}")
+        
+        while True:
+            try:
+                data, addr = sock.recvfrom(BUFFER_SIZE)
+                packet_data = data.decode('utf-8')
+                
+                with buffer_lock:
+                    packet_buffer.append(packet_data)
+                    if len(packet_buffer) >= BATCH_SIZE:
+                        threading.Thread(target=process_batch).start()
+                
+                log_message(f"📨 Received packet from {addr[0]}")
+                
+            except socket.timeout:
+                with buffer_lock:
+                    if packet_buffer:
+                        threading.Thread(target=process_batch).start()
+                continue
+            except Exception as e:
+                log_message(f"❌ UDP error: {e}", "ERROR")
+                
+    except Exception as e:
+        log_message(f"❌ UDP server error: {e}", "ERROR")
+    finally:
+        sock.close()
+
+# ============================================================================
+# SERVEUR TCP (reçoit les scans de VM3)
+# ============================================================================
+
+def tcp_server():
+    """Serveur TCP pour recevoir les scans de VM3"""
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(('0.0.0.0', TCP_PORT))
+        sock.listen(10)
+        
+        log_message(f"📡 TCP Server listening on port {TCP_PORT}")
+        
+        while True:
+            try:
+                client_sock, addr = sock.accept()
+                threading.Thread(
+                    target=handle_tcp_client,
+                    args=(client_sock, addr)
+                ).start()
+            except Exception as e:
+                log_message(f"❌ TCP accept error: {e}", "ERROR")
+                
+    except Exception as e:
+        log_message(f"❌ TCP server error: {e}", "ERROR")
+    finally:
+        sock.close()
+
+def handle_tcp_client(client_sock, addr):
+    try:
+        client_sock.settimeout(30)
+        data = b''
+        while True:
+            chunk = client_sock.recv(8192)
+            if not chunk:
+                break
+            data += chunk
+        
+        if data:
+            log_message(f"📨 Received TCP scan from {addr[0]}")
+            process_scan_data(data.decode('utf-8'))
+            
+    except Exception as e:
+        log_message(f"❌ TCP client error: {e}", "ERROR")
+    finally:
+        client_sock.close()
+
+# ============================================================================
+# TRAITEMENT DES DONNÉES
+# ============================================================================
+
+def process_scan_data(data):
+    """Traite les données de scan reçues"""
+    log_message(f"📊 Processing scan data: {len(data)} bytes")
+    
+    # Envoyer les scans à VM1 si besoin
+    vm1_ip = discover_vm1()
+    if vm1_ip:
+        try:
+            url = f"http://{vm1_ip}:8001/api/v1/scan"
+            response = requests.post(url, json={"scan_data": data}, timeout=2)
+            if response.status_code == 200:
+                log_message("✅ Scan data sent to VM1")
+        except Exception as e:
+            log_message(f"❌ Scan send error: {e}", "ERROR")
+
+def process_packet(packet_data):
+    """Traite un paquet et extrait les features"""
+    try:
+        parts = packet_data.strip().split('|')
+        if len(parts) < 6:
+            return
+        
+        # 1. Extraire les données du paquet
+        packet = {
+            'timestamp': parts[0],
+            'src_ip': parts[1],
+            'dst_ip': parts[2],
+            'protocol': parts[3],
+            'length': int(parts[4]) if parts[4] else 0,
+            'flags': parts[5] if len(parts) > 5 else '',
+            'received_at': datetime.now().isoformat()
+        }
+        
+        # 2. Construire les features au format attendu par VM1
+        # Ce format correspond à FlowFeatures dans main.py
+        features = {
+            'src_ip': packet['src_ip'],
+            'dst_ip': packet['dst_ip'],
+            'protocol': packet['protocol'],
+            'length': packet['length'],
+            'flags': packet['flags'],
+            'timestamp': packet['timestamp'],
+            # Features additionnelles (calculées ou par défaut)
+            'packet_count': 1,
+            'bytes_total': packet['length'],
+            'avg_packet_size': float(packet['length']),
+            'flow_duration': 0.0,
+            'packet_rate': 0.0,
+            'bytes_per_second': 0.0,
+            'syn_count': 1 if 'SYN' in packet['flags'] else 0,
+            'ack_count': 1 if 'ACK' in packet['flags'] else 0,
+            'rst_count': 1 if 'RST' in packet['flags'] else 0,
+            'fin_count': 1 if 'FIN' in packet['flags'] else 0,
+            'flow_id': f"{packet['src_ip']}_{packet['dst_ip']}_{packet['timestamp']}"
+        }
+        
+        # 3. Envoyer à VM1 (ML) pour analyse
+        vm1_ip = discover_vm1()
+        if vm1_ip:
+            try:
+                url = f"http://{vm1_ip}:8001/predict"
+                response = requests.post(url, json=features, timeout=2)
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    log_message(f"🔮 ML Prediction: {result.get('label', 'unknown')} (conf: {result.get('confidence', 0)}%)")
+                    
+                    # Si c'est une attaque, on peut logger spécialement
+                    if result.get('label') == 'ATTACK':
+                        log_message(f"🚨 ALERT: Attack detected from {packet['src_ip']}!")
+                else:
+                    log_message(f"⚠️ VM1 returned status {response.status_code}")
+                    
+            except requests.exceptions.ConnectionError:
+                log_message(f"❌ Cannot connect to VM1 at {url}", "ERROR")
+            except requests.exceptions.Timeout:
+                log_message(f"❌ VM1 timeout", "ERROR")
+            except Exception as e:
+                log_message(f"❌ ML API error: {e}", "ERROR")
+        else:
+            log_message("⚠️ VM1 not discovered, skipping prediction")
+        
+    except Exception as e:
+        log_message(f"❌ Packet processing error: {e}", "ERROR")
+
+def process_batch():
+    """Traite un batch de paquets"""
+    global packet_buffer
+    
+    with buffer_lock:
+        if not packet_buffer:
+            return
+        batch = packet_buffer.copy()
+        packet_buffer = []
+    
+    log_message(f"📦 Processing batch of {len(batch)} packets")
+    
+    for packet_data in batch:
+        process_packet(packet_data)
+
+# ============================================================================
+# MAIN
+# ============================================================================
+
+def main():
+    global ML_API_URL
+    
+    log_message("═══════════════════════════════════════════════════════════")
+    log_message("🔶 SECURE-EYE-XX - Extraction + Backend")
+    log_message("═══════════════════════════════════════════════════════════")
+    log_message(f"📡 UDP Server: port {UDP_PORT} (paquets)")
+    log_message(f"📡 TCP Server: port {TCP_PORT} (scans)")
+    log_message(f"🔗 ML API: {ML_API_URL}")
+    log_message("═══════════════════════════════════════════════════════════")
+    
+    # Découverte rapide de VM1
+    vm1_ip = discover_vm1()
+    log_message(f"✅ SECURE-EYE (VM1) found at: {vm1_ip}")
+    ML_API_URL = f"http://{vm1_ip}:8001/predict"
+    
+    # Démarrer les serveurs
+    udp_thread = threading.Thread(target=udp_server, daemon=True)
+    tcp_thread = threading.Thread(target=tcp_server, daemon=True)
+    
+    udp_thread.start()
+    tcp_thread.start()
+    
+    log_message("✅ All servers started. Waiting for data...")
+    
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        log_message("\n⏹️  Shutting down...")
+        sys.exit(0)
+
+if __name__ == "__main__":
+    main()

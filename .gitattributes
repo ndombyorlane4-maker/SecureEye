@@ -1,0 +1,2 @@
+backend/ML/datasets/cicids2017/*.csv filter=lfs diff=lfs merge=lfs -text
+backend/ML/datasets/cicids2017/*.zip filter=lfs diff=lfs merge=lfs -text

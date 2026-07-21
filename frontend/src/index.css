@@ -1,0 +1,110 @@
+@import "tailwindcss";
+
+/* ==========================================================================
+   1. ANIMATIONS (MOUVEMENT HORIZONTAL CONSERVÉ)
+   ========================================================================== */
+@keyframes pulseGlow {
+  0%, 100% {
+    --pulse1: rgba(45, 42, 250, 0.959);
+    --pulse2: rgba(170, 248, 254, 0.699);
+  }
+  50% {
+    --pulse1: rgba(230, 17, 17, 0.945);
+    --pulse2: rgba(248, 113, 113, 0.5);
+  }
+}
+
+@keyframes horizontalMovement {
+  0%, 100% { --shiftX: 0px; }
+  25% { --shiftX: 35px; }
+  75% { --shiftX: -35px; }
+}
+
+@property --pulse1 { syntax: '<color>'; inherits: false; initial-value: rgba(255,255,255,0.85); }
+@property --pulse2 { syntax: '<color>'; inherits: false; initial-value: rgba(254, 215, 170, 0.35); }
+@property --shiftX { syntax: '<length>'; inherits: false; initial-value: 0px; }
+
+/* ==========================================================================
+   2. CONFIGURATION DU CORPS DE LA PAGE (CORRECTION DU FOND)
+   ========================================================================== */
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-family: 'Inter', sans-serif;
+  
+  /* TOUT EST DANS CETTE PROPRIÉTÉ : Les cercles d'abord, PUIS le dégradé linéaire tout à la fin */
+  background-image:
+    radial-gradient(circle at calc(15% + var(--shiftX)) 20%, var(--pulse1) 15px, transparent 16px),
+    radial-gradient(circle at calc(80% - var(--shiftX)) 15%, var(--pulse1) 22px, transparent 23px),
+    radial-gradient(circle at calc(45% + var(--shiftX)) 55%, var(--pulse1) 18px, transparent 19px),
+    radial-gradient(circle at calc(75% + var(--shiftX)) 40%, var(--pulse2) 150px, transparent 220px),
+    radial-gradient(circle at calc(25% - var(--shiftX)) 60%, var(--pulse2) 200px, transparent 280px),
+    linear-gradient(135deg, #8dcaeb 0%, #d578e6 50%, #f3b7d9 100%); /* Le dégradé Bleu-Rose est ici */
+    
+  animation: 
+    pulseGlow 6s ease-in-out infinite, 
+    horizontalMovement 12s ease-in-out infinite;
+}
+
+/* ==========================================================================
+   3. LA CARTE ET LE RESTE DU CODE (STRICTEMENT INCHANGÉS)
+   ========================================================================== */
+.glass {
+  background: linear-gradient(135deg, rgba(29, 223, 126, 0.548) 0%, rgba(255, 255, 255, 0.1) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 12px 40px 0 rgba(241, 91, 247, 0.452);
+  border-radius: 24px;
+  padding: 2.5rem;
+  width: 100%;
+  max-width: 420px;
+  transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.4s ease;
+}
+
+.glass:hover {
+  transform: translateY(-6px) scale(1.01);
+  box-shadow: 0 20px 50px 0 rgba(120, 20, 0, 0.15);
+}
+
+.glass input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 12px;
+  color: #fff;
+  outline: none;
+  transition: all 0.3s ease;
+}
+
+.glass input:focus {
+  background: rgba(255, 255, 255, 0.8);
+  color: #1e1b4b;
+  border-color: #ffedd5;
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.3);
+  transform: scale(1.01);
+}
+
+.glass button {
+  width: 100%;
+  padding: 0.85rem;
+  background: white;
+  color: #9a3412;
+  border: none;
+  border-radius: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.glass button:hover {
+  filter: brightness(1.05);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
