@@ -62,7 +62,6 @@ class ScanDevice(BaseModel):
     status: str = "online"
 
 # ---- CONFIGURATION ----
-# URL du ML API (VM1)
 ML_API_URL = os.getenv('ML_API_URL', 'http://172.20.10.6:8001')
 
 # ---- ENDPOINTS ----
@@ -106,17 +105,37 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-# ---- PREDICT ENDPOINT (Proxy vers VM1) ----
+# ---- HELPER : Update devices from packets ----
+def update_devices_from_packets():
+    global global_devices
+    # Extraire les IPs uniques des paquets
+    ips = set()
+    for packet in global_packets:
+        if 'src' in packet:
+            ips.add(packet['src'])
+        if 'dst' in packet:
+            ips.add(packet['dst'])
+    
+    # Mettre à jour global_devices
+    new_devices = []
+    for ip in ips:
+        new_devices.append({
+            'ip': ip,
+            'mac': 'Unknown',
+            'status': 'active',
+            'name': 'Device'
+        })
+    global_devices = new_devices
+
+# ---- PREDICT ENDPOINT ----
 @app.post('/predict')
 async def predict(flow: FlowFeatures):
-    global global_alerts, global_packets
+    global global_alerts, global_packets, global_devices
     
     try:
-        # Forward les données à VM1 (ML)
         response = requests.post(
             f"{ML_API_URL}/predict",
             json=flow.dict(),
-            headers={"Authorization": user},
             timeout=5
         )
         
@@ -126,6 +145,9 @@ async def predict(flow: FlowFeatures):
             # Stocker localement
             global_packets.insert(0, result)
             global_packets = global_packets[:100]
+            
+            # Mettre à jour les devices
+            update_devices_from_packets()
             
             await manager.broadcast(json.dumps({'type': 'PACKET', **result}))
             
@@ -194,7 +216,7 @@ async def report_devices(devices: List[DeviceModel]):
 
 @app.get('/devices')
 async def get_devices():
-    print(f"📊 Devices: {global_devices}")
+    global global_devices
     return {'devices': global_devices, 'total': len(global_devices)}
 
 @app.get('/alerts')
