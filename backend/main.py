@@ -194,7 +194,7 @@ async def report_devices(devices: List[DeviceModel]):
 
 @app.get('/devices')
 async def get_devices():
-    global global_devices
+    print(f"📊 Devices: {global_devices}")
     return {'devices': global_devices, 'total': len(global_devices)}
 
 @app.get('/alerts')
