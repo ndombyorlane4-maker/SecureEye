@@ -24,11 +24,6 @@ INFLUXDB_TOKEN = os.getenv('INFLUXDB_TOKEN', '')
 INFLUXDB_ORG = os.getenv('INFLUXDB_ORG', 'secureeye')
 INFLUXDB_BUCKET = os.getenv('INFLUXDB_BUCKET', 'network_metrics')
 
-<<<<<<< HEAD
-# ---- CLIENTS ----
-influx_client = InfluxDBClient(url=INFLUXDB_URL, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG)
-query_api = influx_client.query_api()
-=======
 # ---- PYDANTIC MODELS ----
 class DeviceModel(BaseModel):
     ip: str
@@ -83,7 +78,6 @@ def health_check():
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat()
     }
->>>>>>> dcc6404f0b0ab50368de79b009c540c71a0b3627
 
 # ---- WEBSOCKET MANAGER ----
 class ConnectionManager:
@@ -107,32 +101,6 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-<<<<<<< HEAD
-# ---- FONCTIONS POUR LIRE DEPUIS INFLUXDB ----
-def get_devices_from_influx():
-    """Récupère la liste des appareils depuis InfluxDB"""
-    flux = f'''
-    from(bucket: "{INFLUXDB_BUCKET}")
-      |> range(start: -24h)
-      |> filter(fn: (r) => r._measurement == "network_flow")
-      |> group(columns: ["src"])
-      |> distinct(column: "src")
-    '''
-    try:
-        result = query_api.query(flux)
-        devices = []
-        for table in result:
-            for record in table.records:
-                ip = record.get_value()
-                if ip:
-                    devices.append({
-                        'ip': ip,
-                        'mac': 'Unknown',
-                        'status': 'active',
-                        'name': 'Device'
-                    })
-        return devices
-=======
 # ---- HELPER : Update devices from packets ----
 def update_devices_from_packets():
     global global_devices
@@ -190,91 +158,10 @@ async def predict(flow: FlowFeatures):
             
     except requests.exceptions.ConnectionError:
         return {"error": "ML API unavailable"}
->>>>>>> dcc6404f0b0ab50368de79b009c540c71a0b3627
     except Exception as e:
         print(f"❌ Error reading devices: {e}")
         return []
 
-<<<<<<< HEAD
-def get_alerts_from_influx():
-    """Récupère les alertes depuis InfluxDB"""
-    flux = f'''
-    from(bucket: "{INFLUXDB_BUCKET}")
-      |> range(start: -24h)
-      |> filter(fn: (r) => r._measurement == "network_flow")
-      |> filter(fn: (r) => r.label == "ATTACK")
-      |> sort(columns: ["_time"], desc: true)
-      |> limit(n: 50)
-    '''
-    try:
-        result = query_api.query(flux)
-        alerts = []
-        for table in result:
-            for record in table.records:
-                alerts.append({
-                    'src': record.values.get('src', 'unknown'),
-                    'dst': record.values.get('dst', 'unknown'),
-                    'label': record.values.get('label', 'ATTACK'),
-                    'confidence': record.get_value(),
-                    'time': record.get_time().isoformat() if record.get_time() else ''
-                })
-        return alerts
-    except Exception as e:
-        print(f"❌ Error reading alerts: {e}")
-        return []
-
-def get_stats_from_influx():
-    """Récupère les statistiques depuis InfluxDB"""
-    devices = get_devices_from_influx()
-    alerts = get_alerts_from_influx()
-    return {
-        'active_devices': len(devices),
-        'offline_devices': 0,
-        'attacks_today': len(alerts),
-        'total_devices': len(devices)
-    }
-
-# ---- ENDPOINTS ----
-@app.get("/")
-def read_root():
-    return {"app": "Secure-Eye Backend", "version": "1.0", "status": "running"}
-
-@app.get("/health")
-def health_check():
-    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
-
-@app.get('/devices')
-async def get_devices():
-    devices = get_devices_from_influx()
-    return {'devices': devices, 'total': len(devices)}
-
-@app.get('/alerts')
-async def get_alerts():
-    alerts = get_alerts_from_influx()
-    return {'status': 'success', 'data': alerts}
-
-@app.get('/stats')
-async def get_stats():
-    stats = get_stats_from_influx()
-    return {'status': 'success', 'data': stats}
-
-@app.get('/machines')
-async def get_machines():
-    devices = get_devices_from_influx()
-    return {'status': 'success', 'data': devices}
-
-@app.get('/blocked')
-async def get_blocked():
-    return {'status': 'success', 'data': []}
-
-@app.post('/block')
-async def block_ip(payload: dict):
-    return {'status': 'success', 'blocked': payload.get('ip')}
-
-@app.delete('/blocked/{ip}')
-async def unblock_ip(ip: str):
-    return {'status': 'success', 'unblocked': ip}
-=======
 # ---- SCAN RECEIVE ----
 @app.post('/api/v1/scan')
 async def receive_scan(devices: List[ScanDevice]):
@@ -295,7 +182,6 @@ async def receive_scan(devices: List[ScanDevice]):
         'count': len(global_devices)
     }))
     return {'status': 'success', 'updated_count': len(global_devices)}
->>>>>>> dcc6404f0b0ab50368de79b009c540c71a0b3627
 
 # ---- WEBSOCKET ----
 @app.websocket('/ws')
@@ -308,8 +194,6 @@ async def websocket_endpoint(ws: WebSocket):
                 await ws.send_text("pong")
     except WebSocketDisconnect:
         manager.disconnect(ws)
-<<<<<<< HEAD
-=======
     except Exception:
         manager.disconnect(ws)
 
@@ -369,7 +253,6 @@ async def unblock_ip(ip: str):
     if ip in global_blocked_ips:
         global_blocked_ips.remove(ip)
     return {'status': 'success', 'unblocked': ip}
->>>>>>> dcc6404f0b0ab50368de79b009c540c71a0b3627
 
 # ---- STARTUP ----
 if __name__ == '__main__':
