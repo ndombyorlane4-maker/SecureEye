@@ -1,2 +1,2 @@
-# secure-eye
+
 # SecureEye
