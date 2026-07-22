@@ -93,6 +93,7 @@ def get_devices_from_influx():
       |> filter(fn: (r) => r._measurement == "network_flow")
       |> group(columns: ["src"])
       |> distinct(column: "src")
+      |> map(fn: (r) => ({{ r with _value: string(v: r._value) }}))
     '''
     try:
         result = query_api.query(flux)
