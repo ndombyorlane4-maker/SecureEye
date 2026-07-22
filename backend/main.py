@@ -93,16 +93,21 @@ def get_devices_from_influx():
       |> filter(fn: (r) => r._measurement == "network_flow")
       |> group(columns: ["src"])
       |> distinct(column: "src")
-      |> map(fn: (r) => ({{ r with _value: string(v: r._value) }}))
     '''
     try:
         result = query_api.query(flux)
         devices = []
         for table in result:
             for record in table.records:
-                ip = record.get_value()
-                if ip:
-                    devices.append({'ip': ip, 'mac': 'Unknown', 'status': 'active', 'name': 'Device'})
+                # Convertir la valeur en chaîne pour éviter les conflits de types
+                ip = str(record.get_value())
+                if ip and ip != 'None':
+                    devices.append({
+                        'ip': ip,
+                        'mac': 'Unknown',
+                        'status': 'active',
+                        'name': 'Device'
+                    })
         return devices
     except Exception as e:
         print(f"❌ Error reading devices: {e}")
