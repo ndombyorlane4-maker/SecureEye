@@ -108,10 +108,10 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 # ---- AUTH ----
-@app.post('/auth/token')
-async def login(form: OAuth2PasswordRequestForm = Depends()):
-    admin_user = os.getenv('ADMIN_USERNAME', 'admin')
-    admin_hash = os.getenv('ADMIN_PASSWORD_HASH')
+#@app.post('/auth/token')
+#async def login(form: OAuth2PasswordRequestForm = Depends()):
+#    admin_user = os.getenv('ADMIN_USERNAME', 'admin')
+ #   admin_hash = os.getenv('ADMIN_PASSWORD_HASH')
 
     if not admin_hash:
         raise HTTPException(
@@ -131,7 +131,7 @@ async def login(form: OAuth2PasswordRequestForm = Depends()):
 
 # ---- PREDICT ENDPOINT (Proxy vers VM1) ----
 @app.post('/predict')
-async def predict(flow: FlowFeatures, user=Depends(decode_token)):
+async def predict(flow: FlowFeatures):
     global global_alerts, global_packets
     
     try:
@@ -168,7 +168,7 @@ async def predict(flow: FlowFeatures, user=Depends(decode_token)):
 
 # ---- SCAN RECEIVE ----
 @app.post('/api/v1/scan')
-async def receive_scan(devices: List[ScanDevice], user=Depends(decode_token)):
+async def receive_scan(devices: List[ScanDevice]):
     global global_devices
     converted_devices = []
     for device in devices:
@@ -210,23 +210,23 @@ async def websocket_endpoint(ws: WebSocket):
 
 # ---- DEVICE ENDPOINTS ----
 @app.post('/api/report-devices')
-async def report_devices(devices: List[DeviceModel], user=Depends(decode_token)):
+async def report_devices(devices: List[DeviceModel]):
     global global_devices
     global_devices = [d.model_dump() for d in devices]
     return {'status': 'success', 'updated_count': len(global_devices)}
 
 @app.get('/devices')
-async def get_devices(user=Depends(decode_token)):
+async def get_devices():
     global global_devices
     return {'devices': global_devices, 'total': len(global_devices)}
 
 @app.get('/alerts')
-async def get_alerts(user=Depends(decode_token)):
+async def get_alerts():
     global global_alerts
     return {'status': 'success', 'data': global_alerts}
 
 @app.get('/stats')
-async def get_stats(user=Depends(decode_token)):
+async def get_stats():
     global global_devices, global_alerts
     active_count = len([d for d in global_devices if d['status'] == 'active'])
     offline_count = len([d for d in global_devices if d['status'] != 'active'])
@@ -241,17 +241,17 @@ async def get_stats(user=Depends(decode_token)):
     }
 
 @app.get('/machines')
-async def get_machines(user=Depends(decode_token)):
+async def get_machines():
     global global_devices
     return {'status': 'success', 'data': global_devices}
 
 @app.get('/blocked')
-async def get_blocked(user=Depends(decode_token)):
+async def get_blocked():
     global global_blocked_ips
     return {'status': 'success', 'data': list(global_blocked_ips)}
 
 @app.post('/block')
-async def block_ip(payload: dict, user=Depends(decode_token)):
+async def block_ip(payload: dict):
     global global_blocked_ips
     ip = payload.get('ip')
     if ip:
@@ -259,7 +259,7 @@ async def block_ip(payload: dict, user=Depends(decode_token)):
     return {'status': 'success', 'blocked': ip}
 
 @app.delete('/blocked/{ip}')
-async def unblock_ip(ip: str, user=Depends(decode_token)):
+async def unblock_ip(ip: str):
     global global_blocked_ips
     if ip in global_blocked_ips:
         global_blocked_ips.remove(ip)
