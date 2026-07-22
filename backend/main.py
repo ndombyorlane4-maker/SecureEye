@@ -106,28 +106,6 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-# ---- AUTH ----
-#@app.post('/auth/token')
-#async def login(form: OAuth2PasswordRequestForm = Depends()):
-#    admin_user = os.getenv('ADMIN_USERNAME', 'admin')
- #   admin_hash = os.getenv('ADMIN_PASSWORD_HASH')
-
-    if not admin_hash:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="ADMIN_PASSWORD_HASH not configured"
-        )
-    
-    password_bytes = form.password.encode('utf-8')
-    admin_hash_bytes = admin_hash.encode('utf-8')
-    is_valid = bcrypt.checkpw(password_bytes, admin_hash_bytes)
-    
-    if form.username != admin_user or not is_valid:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-        
-    token = create_access_token({'sub': form.username})
-    return {'access_token': token, 'token_type': 'bearer'}
-
 # ---- PREDICT ENDPOINT (Proxy vers VM1) ----
 @app.post('/predict')
 async def predict(flow: FlowFeatures):
