@@ -96,23 +96,18 @@ def get_devices_from_influx():
     '''
     try:
         result = query_api.query(flux)
+        print(f"🐛 DEBUG - InfluxDB result: {result}")
         devices = []
         for table in result:
             for record in table.records:
-                # Convertir la valeur en chaîne pour éviter les conflits de types
                 ip = str(record.get_value())
                 if ip and ip != 'None':
-                    devices.append({
-                        'ip': ip,
-                        'mac': 'Unknown',
-                        'status': 'active',
-                        'name': 'Device'
-                    })
+                    devices.append({'ip': ip, 'mac': 'Unknown', 'status': 'active', 'name': 'Device'})
+        print(f"🐛 DEBUG - Devices: {devices}")
         return devices
     except Exception as e:
         print(f"❌ Error reading devices: {e}")
         return []
-
 def get_alerts_from_influx():
     flux = f'''
     from(bucket: "{INFLUXDB_BUCKET}")
