@@ -91,19 +91,21 @@ def get_devices_from_influx():
     from(bucket: "{INFLUXDB_BUCKET}")
       |> range(start: -24h)
       |> filter(fn: (r) => r._measurement == "network_flow")
+      |> filter(fn: (r) => exists r.src)
       |> group(columns: ["src"])
-      |> distinct(column: "src")
-      |> map(fn: (r) => ({{ r with _value: string(v: r._value) }}))
+      |> count()
     '''
     try:
         result = query_api.query(flux)
         devices = []
+        seen = set()
         for table in result:
             for record in table.records:
-                ip = record.get_value()
-                if ip:
+                ip = str(record.values.get('src', ''))
+                if ip and ip not in seen:
+                    seen.add(ip)
                     devices.append({
-                        'ip': str(ip),
+                        'ip': ip,
                         'mac': 'Unknown',
                         'status': 'active',
                         'name': 'Device'
