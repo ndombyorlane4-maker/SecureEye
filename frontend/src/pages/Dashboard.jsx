@@ -79,7 +79,7 @@ export default function Dashboard() {
         {/* Header (Strictement identique à votre code) */}
         <header className='flex items-center justify-between mb-6'>
           <div className='flex items-center gap-3'>
-            <img src='secure-eye/frontend/public/secureeye logo.jpeg' className='h-10' alt='logo' />
+            <img src='/secureeye_logo.jpeg' className='h-10' alt='logo' />
             <h1 className='text-white text-2xl font-black tracking-widest'>SECURE-EYE</h1>
           </div>
           <div className='flex gap-4 text-sm font-mono text-white/60'>
