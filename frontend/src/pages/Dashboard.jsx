@@ -27,6 +27,7 @@ export default function Dashboard() {
   const [devices, setDevices] = useState([]);
   const [alerts,  setAlerts]  = useState([]);
   const [packets, setPackets] = useState([]);
+  console.log('Packets:', packets);  // Ajoute ce log
   const wsRef = useRef(null);
 
   // Fetch devices every 30s
@@ -38,7 +39,7 @@ export default function Dashboard() {
   }, []);
 
   function connectWS() {
-  const ws = new WebSocket('wss://://secure-eye.onrender.com');
+  const ws = new WebSocket('wss://secure-eye-backend.onrender.com/ws');
 
   ws.onclose = () => {
     console.log('WebSocket disconnected. Reconnecting in 3 seconds...');
