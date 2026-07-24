@@ -55,16 +55,37 @@ export default function Dashboard() {
 
   // WebSocket for real-time events
   useEffect(() => {
-    wsRef.current = new WebSocket(WS_URL);
-    wsRef.current.onmessage = (e) => {
-      const msg = JSON.parse(e.data);
-      if (msg.type === 'ALERT') {
-        setAlerts(prev => [{ ...msg, time: new Date().toLocaleTimeString() }, ...prev].slice(0,50));
-      }
-      setPackets(prev => [{ ...msg, time: new Date().toLocaleTimeString() }, ...prev].slice(0,100));
+    const ws = new WebSocket('wss://secure-eye-backend.onrender.com/ws');
+
+    ws.onmessage = (e) => {
+        try {
+            const msg = JSON.parse(e.data);
+            console.log('📨 Message WebSocket reçu:', msg);
+
+            if (msg.type === 'ALERT') {
+                setAlerts(prev => [{ ...msg, time: new Date().toLocaleTimeString() }, ...prev].slice(0, 50));
+            }
+
+            setPackets(prev => {
+                const newPackets = [{ ...msg, time: new Date().toLocaleTimeString() }, ...prev].slice(0, 100);
+                console.log('📦 Packets mis à jour:', newPackets);
+                return newPackets;
+            });
+        } catch (error) {
+            console.error('❌ Erreur de parsing WebSocket:', error);
+        }
     };
-    return () => wsRef.current?.close();
-  }, []);
+
+    ws.onerror = (error) => {
+        console.error('❌ WebSocket error:', error);
+    };
+
+    ws.onclose = () => {
+        console.log('🔌 WebSocket déconnecté');
+    };
+
+    return () => ws.close();
+}, []);
 
   return (
     /* Structure Flexbox pour caler la SideBar à gauche sans casser votre mise en page */
