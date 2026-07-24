@@ -33,7 +33,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
+  overflow: auto;
   font-family: 'Inter', sans-serif;
   
   /* TOUT EST DANS CETTE PROPRIÉTÉ : Les cercles d'abord, PUIS le dégradé linéaire tout à la fin */
@@ -43,7 +43,7 @@ body {
     radial-gradient(circle at calc(45% + var(--shiftX)) 55%, var(--pulse1) 18px, transparent 19px),
     radial-gradient(circle at calc(75% + var(--shiftX)) 40%, var(--pulse2) 150px, transparent 220px),
     radial-gradient(circle at calc(25% - var(--shiftX)) 60%, var(--pulse2) 200px, transparent 280px),
-    linear-gradient(135deg, #8dcaeb 0%, #d578e6 50%, #f3b7d9 100%); /* Le dégradé Bleu-Rose est ici */
+    linear-gradient(135deg, #8dcaeb 0%, #231425 50%, #47333f 100%); /* Le dégradé Bleu-Rose est ici */
     
   animation: 
     pulseGlow 6s ease-in-out infinite, 
@@ -54,11 +54,11 @@ body {
    3. LA CARTE ET LE RESTE DU CODE (STRICTEMENT INCHANGÉS)
    ========================================================================== */
 .glass {
-  background: linear-gradient(135deg, rgba(29, 223, 126, 0.548) 0%, rgba(255, 255, 255, 0.1) 100%);
+  background: linear-gradient(135deg, rgba(3, 73, 38, 0.329), rgba(255, 255, 255, 0.1) 100%);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.4);
-  box-shadow: 0 12px 40px 0 rgba(241, 91, 247, 0.452);
+  box-shadow: 0 12px 40px 0 rgba(100, 56, 102, 0.452);
   border-radius: 24px;
   padding: 2.5rem;
   width: 100%;
